@@ -102,10 +102,10 @@ class Solver:
         for category in Categories:
             template = cv2.matchTemplate(self.game, self.categories[category.name], cv2.TM_CCOEFF_NORMED)
             loc = np.where( template >= self.template_threshold)
+            matches = list(zip(*loc[::-1]))
 
-            for pt in zip(*loc[::-1]):
-                self.coords.append(pt)
-                self.states.append(category)
+            self.coords.extend(matches)
+            self.states.extend([category] * len(matches))
 
         for dim_y in range(Dimensions[self.mode.name].value[1]):
             y = self.grid_top_left[1] + (32*dim_y)
@@ -123,18 +123,19 @@ class Solver:
         self.mines_current = self.get_mines_amount()
 
         self.coords, self.states = (list(t) for t in zip(*sorted(zip(self.coords, self.states), key=lambda k: [k[0][1], k[0][0]])))
+        
+        if self.states[-1] != Categories.full:
+            self.states.reverse()
+            self.coords.reverse()
+
         logging.debug(f"Update Cubes Time Taken: %s", (time.time() - start))
 
-    def is_flag(self, x, y):
+    def click_cube(self, x, y, *, click="left"):
         flag = cv2.matchTemplate(self.game, self.categories["bomb"], cv2.TM_CCOEFF_NORMED)
         loc = list(zip(*np.where( flag >= self.template_threshold)[::-1]))
 
-        is_flag = self.states[self.coords.index((x, y))] == Categories.bomb
-
-        return (x, y) in loc or is_flag
-
-    def click_cube(self, x, y, *, click="left"):
-        if self.is_flag(x, y):
+        is_bomb = self.states[self.coords.index((x, y))] == Categories.bomb
+        if (x, y) in loc or is_bomb:
             return
 
         pyautogui.click(self.box.left + x + 16, self.box.top + y + 16, button=click)    
@@ -147,7 +148,15 @@ class Solver:
     def result(self):
         playing = cv2.matchTemplate(self.game, self.win, cv2.TM_CCOEFF_NORMED)
         loc = list(zip(*np.where( playing >= self.template_threshold)[::-1]))
-        return bool(loc)  
+        return bool(loc)
+
+    def to_matrix(self):
+        dim = Dimensions[self.mode.name]
+        row_len = dim.value[0]
+        matrix_coords = np.matrix([self.coords[y*row_len:(y+1)*row_len] for y in range(dim.value[1])])
+        matrix_states = np.matrix([self.states[y*row_len:(y+1)*row_len] for y in range(dim.value[1])])
+
+        return matrix_coords, matrix_states
 
     def get_neighbors(self, index):
         start = time.time()
@@ -200,40 +209,39 @@ class Solver:
         logging.debug(f"Make Decision Time Taken: %s", (time.time() - start))
         return change
 
-    def make_a_complex_decision(self, neighbors, index, change):
-        return change
-
-    def solve(self):
+    def run(self):
         self.get_updated_cubes()
         self.mines_max = self.get_mines_amount()
 
-        while True:
-            change = False
-            for index, _ in enumerate(self.states):
-                if not isinstance(self.states[index], int):
-                    continue
+        while self.is_playing():
+            self.solve()
 
-                if not self.is_playing():
-                    return self.result()
+        return self.result()
 
-                if index in self.solved:
-                    continue
+    def solve(self):
+        change = False
 
-                logging.debug("Resolving for %s @ %s", self.states[index], index)
+        for index, state in enumerate(self.states):
+            if not isinstance(state, int):
+                continue
 
-                neighbors = self.get_neighbors(index)
-                if not any([self.states[neighbor] == Categories.full for neighbor in neighbors]):
-                    self.solved.append(index)
-                    continue
+            if index in self.solved:
+                continue
 
-                change = self.make_a_simple_decision(neighbors, index, change) 
+            logging.debug("Resolving for %s @ %s", state, index)
 
-            if not change:
-                logging.debug("Out of options, picking a random cube")
-                coord = random.choice([coord for coord in self.coords if self.states[self.coords.index(coord)] == Categories.full])
-                self.click_cube(*coord) 
-                self.get_updated_cubes()
+            neighbors = self.get_neighbors(index)
+            if not any([self.states[neighbor] == Categories.full for neighbor in neighbors]):
+                self.solved.append(index)
+                continue
 
+            change = self.make_a_simple_decision(neighbors, index, change)
+
+        if not change:
+            logging.debug("Out of options, picking a random cube")
+            coord = random.choice([coord for coord in self.coords if self.states[self.coords.index(coord)] == Categories.full])
+            self.click_cube(*coord) 
+            self.get_updated_cubes()
 
 if __name__ == '__main__':
     pyautogui.hotkey("alt", "tab")
@@ -247,7 +255,7 @@ if __name__ == '__main__':
     for game in range(games):
         global_start = time.time()
         solver = Solver()
-        result = solver.solve()
+        result = solver.run()
         final = time.time() - global_start
 
         if result:
