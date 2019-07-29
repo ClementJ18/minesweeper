@@ -49,7 +49,7 @@ def victory_method(victories):
             solver.restart()
 
 def classic_method(games):
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     for game in range(games):
         solver = Solver()
         result = solver.run()

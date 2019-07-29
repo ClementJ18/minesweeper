@@ -89,6 +89,7 @@ class Solver:
 
         return int(number)
 
+    #timeME
     def get_updated_cubes(self):
         start = time.time()
 
@@ -128,7 +129,9 @@ class Solver:
             self.states.reverse()
             self.coords.reverse()
 
-        logging.debug(f"Update Cubes Time Taken: %s", (time.time() - start))
+        time_taken = time.time() - start
+        logging.info(f"Update Cubes Time Taken: %s", time_taken)
+        return time_taken
 
     def click_cube(self, x, y, *, click="left"):
         flag = cv2.matchTemplate(self.game, self.categories["bomb"], cv2.TM_CCOEFF_NORMED)
@@ -158,6 +161,7 @@ class Solver:
 
         return matrix_coords, matrix_states
 
+    #timeME
     def get_neighbors(self, index):
         start = time.time()
         dimension = Dimensions[self.mode.name]
@@ -177,11 +181,13 @@ class Solver:
 
         neighbors = [neighbor for neighbor in neighbors_index if 0 < neighbor < (row_len * col_len) and self.states[neighbor] in [Categories.bomb, Categories.full]]
 
-        logging.debug(f"Neighbors Time Taken: %s", (time.time() - start))
+        logging.info(f"Neighbors Time Taken: %s", (time.time() - start))
         return neighbors
 
+    #timeME
     def make_a_simple_decision(self, neighbors, index, change):
         start = time.time()
+        decision_time = 0
 
         full_or_bomb_neighbors = [self.states[neighbor] for neighbor in neighbors if self.states[neighbor] in [Categories.full, Categories.bomb]]
         if len(full_or_bomb_neighbors) == self.states[index] and not all([neighbor == Categories.bomb for neighbor in full_or_bomb_neighbors]):
@@ -194,7 +200,7 @@ class Solver:
                 self.states[bomb] = Categories.bomb
                 change = True
                 
-            self.get_updated_cubes()
+            decision_time += self.get_updated_cubes()
 
         bomb_neighbors = [self.states[neighbor] for neighbor in neighbors if self.states[neighbor] == Categories.bomb]
         if len(bomb_neighbors) == self.states[index] and any([self.states[neighbor] == Categories.full for neighbor in neighbors]):
@@ -204,9 +210,9 @@ class Solver:
                     self.click_cube(*self.coords[to_click])
                     change = True
                     
-            self.get_updated_cubes()
+            decision_time += self.get_updated_cubes()
 
-        logging.debug(f"Make Decision Time Taken: %s", (time.time() - start))
+        logging.info(f"Make Decision Time Taken: %s", (time.time() - start - decision_time))
         return change
 
     def run(self):
@@ -228,7 +234,7 @@ class Solver:
             if index in self.solved:
                 continue
 
-            logging.debug("Resolving for %s @ %s", state, index)
+            logging.info("Resolving for %s @ %s", state, index)
 
             neighbors = self.get_neighbors(index)
             if not any([self.states[neighbor] == Categories.full for neighbor in neighbors]):
@@ -238,7 +244,7 @@ class Solver:
             change = self.make_a_simple_decision(neighbors, index, change)
 
         if not change:
-            logging.debug("Out of options, picking a random cube")
+            logging.info("Out of options, picking a random cube")
             coord = random.choice([coord for coord in self.coords if self.states[self.coords.index(coord)] == Categories.full])
             self.click_cube(*coord) 
             self.get_updated_cubes()
