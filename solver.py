@@ -73,9 +73,13 @@ class Solver:
 
     @staticmethod
     def restart():
-        re = pyautogui.locateOnScreen("assets/win.png")
-        if not re:
-            re = pyautogui.locateOnScreen("assets/dead.png")
+        for x in ["win", "dead", "playing"]:
+            re = pyautogui.locateOnScreen(f"assets/{x}.png")
+
+            if not re is None:
+                break
+        else:
+            return
 
         pyautogui.click(re.left + 16, re.top + 16, button="left")
 
@@ -156,9 +160,9 @@ class Solver:
     def to_matrix(self):
         dim = Dimensions[self.mode.name]
         row_len = dim.value[0]
-        matrix_coords = np.matrix([self.coords[y*row_len:(y+1)*row_len] for y in range(dim.value[1])])
-        matrix_states = np.matrix([self.states[y*row_len:(y+1)*row_len] for y in range(dim.value[1])])
-
+        matrix_coords = [self.coords[y*row_len:(y+1)*row_len] for y in range(dim.value[1])]
+        matrix_states = [self.states[y*row_len:(y+1)*row_len] for y in range(dim.value[1])
+]
         return matrix_coords, matrix_states
 
     #timeME
@@ -200,7 +204,7 @@ class Solver:
                 self.states[bomb] = Categories.bomb
                 change = True
                 
-            decision_time += self.get_updated_cubes()
+                decision_time += self.get_updated_cubes()
 
         bomb_neighbors = [self.states[neighbor] for neighbor in neighbors if self.states[neighbor] == Categories.bomb]
         if len(bomb_neighbors) == self.states[index] and any([self.states[neighbor] == Categories.full for neighbor in neighbors]):
@@ -210,7 +214,7 @@ class Solver:
                     self.click_cube(*self.coords[to_click])
                     change = True
                     
-            decision_time += self.get_updated_cubes()
+                decision_time += self.get_updated_cubes()
 
         logging.info(f"Make Decision Time Taken: %s", (time.time() - start - decision_time))
         return change
@@ -251,28 +255,18 @@ class Solver:
 
 if __name__ == '__main__':
     pyautogui.hotkey("alt", "tab")
+    logging.basicConfig(level=logging.DEBUG)
+    global_start = time.time()
+    solver = Solver()
+    result = solver.run()
+    final = time.time() - global_start
 
-    try:
-        games = int(sys.argv[1])
-    except IndexError:
-        games = 1
-        logging.basicConfig(level=logging.DEBUG)
+    if result:
+        message = f"Victory in {final}\n"
+    else:
+        message = f"Defeat in {final}\n"
 
-    for game in range(games):
-        global_start = time.time()
-        solver = Solver()
-        result = solver.run()
-        final = time.time() - global_start
+    with open("solver1.csv", "a+") as f:
+        f.write(f"{result},{final}\n")
 
-        if result:
-            message = f"Victory in {final}\n"
-        else:
-            message = f"Defeat in {final}\n"
-
-        with open("solver1.csv", "a+") as f:
-            f.write(f"{result},{final}\n")
-
-        logging.debug(message)
-
-        if not game == games - 1:
-            solver.restart()
+    logging.debug(message)

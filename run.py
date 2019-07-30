@@ -4,6 +4,7 @@ import logging
 import time
 import pyautogui
 from solver import Solver
+import cv2
 
 def benchmark_method(games):
     logging.basicConfig(level=logging.DEBUG)
@@ -62,12 +63,28 @@ def classic_method(games):
         if not game == games - 1:
             solver.restart()
 
-mapping = [classic_method, benchmark_method, victory_method]
+def debug_method(games):
+    logging.basicConfig(level=logging.DEBUG)
+    for game in range(games):
+        solver = Solver()
+        result = solver.run()
+
+        if result:
+            print("Victory!")
+        else:
+            print("Defeat!")
+            cv2.imwrite(f"defeat/{time.time()}.png", solver.take_screenshot())
+
+        if not game == games - 1:
+            solver.restart()
+
+mapping = [classic_method, benchmark_method, victory_method, debug_method]
 
 class CMDGamemode(enum.Enum):
     classic     = 0
     benchmark   = 1
     victory     = 2
+    debug       = 3
 
     def __str__(self):
         return self.value
